@@ -15,7 +15,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight requests
+
 
 // 3. Initialize the Google AI Client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
