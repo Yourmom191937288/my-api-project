@@ -1,7 +1,7 @@
-const fetch = require('node-fetch'); // Uses the node-fetch library
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const axios = require('axios'); // Use the axios library
 
 const app = express();
 app.use(express.json());
@@ -14,15 +14,11 @@ app.post('/solve-math', async (req, res) => {
     const userProblem = req.body.problem;
     if (!userProblem) return res.status(400).json({ error: "No problem provided." });
 
-    const response = await fetch(TEXT_API_URL, {
-      headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` },
-      method: "POST",
-      body: JSON.stringify({ inputs: userProblem }),
+    const response = await axios.post(TEXT_API_URL, { inputs: userProblem }, {
+      headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` }
     });
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = await response.json();
-    res.json({ answer: result[0].generated_text });
+    res.json({ answer: response.data[0].generated_text });
   } catch (error) {
     console.error("Error calling Hugging Face Text API:", error);
     res.status(500).json({ error: "Something went wrong on the server." });
@@ -32,33 +28,25 @@ app.post('/solve-math', async (req, res) => {
 // --- ENDPOINT #2: IMAGE READER (FROM URL) ---
 app.post('/read-image-from-url', async (req, res) => {
   try {
-    const VQA_API_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-vqa-base";
+    const VQA_API_URL = "https://api-inference.huggingface.co/models/dandelin/vilt-b32-finetuned-vqa";
     const { prompt, imageUrl } = req.body;
     if (!prompt || !imageUrl) return res.status(400).json({ error: "A prompt and imageUrl are required." });
 
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) throw new Error(`Failed to fetch image. Status: ${imageResponse.status}`);
+    // Server fetches the image
+    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const imageBase64 = Buffer.from(imageResponse.data).toString('base64');
 
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const imageBase64 = Buffer.from(imageBuffer).toString('base64');
-
-    const hfResponse = await fetch(VQA_API_URL, {
-      headers: {
-        "Authorization": `Bearer ${process.env.HF_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      method: "POST",
-      body: JSON.stringify({
-        inputs: {
-          question: prompt,
-          image: imageBase64
-        }
-      }),
+    // Server sends the question and image to the Hugging Face API using axios
+    const hfResponse = await axios.post(VQA_API_URL, {
+      inputs: {
+        question: prompt,
+        image: imageBase64
+      }
+    }, {
+      headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` }
     });
 
-    if (!hfResponse.ok) throw new Error(await hfResponse.text());
-    const result = await hfResponse.json();
-    res.json({ answer: result[0].answer });
+    res.json({ answer: hfResponse.data[0].answer });
 
   } catch (error) {
     console.error("FULL ERROR OBJECT:", error);
@@ -70,5 +58,4 @@ app.post('/read-image-from-url', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-});
 });
