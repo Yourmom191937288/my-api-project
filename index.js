@@ -1,11 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const axios = require('axios'); // Use the axios library
+const axios = require('axios'); // Use the axios library for requests
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors()); // This line handles CORS policy
 
 // --- ENDPOINT #1: TEXT SOLVER ---
 app.post('/solve-math', async (req, res) => {
@@ -32,7 +32,7 @@ app.post('/read-image-from-url', async (req, res) => {
     const { prompt, imageUrl } = req.body;
     if (!prompt || !imageUrl) return res.status(400).json({ error: "A prompt and imageUrl are required." });
 
-    // Server fetches the image
+    // Server fetches the image using axios
     const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
     const imageBase64 = Buffer.from(imageResponse.data).toString('base64');
 
