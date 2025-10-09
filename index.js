@@ -9,50 +9,35 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// --- ENDPOINT #1: TEXT MATH SOLVER (Qwen2.5 Math) ---
-app.post('/solve-math', async (req, res) => {
-  try {
-    const TEXT_API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Math-7B"; // Your chosen model
-    const userProblem = req.body.problem;
-
-    if (!userProblem) {
-      return res.status(400).json({ error: "No problem provided." });
-    }
-
-    const response = await axios.post(
-      TEXT_API_URL,
-      { inputs: userProblem },
-      { headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` } }
-    );
-
-    const result = response.data;
-    const aiAnswer = result[0].generated_text;
-
-    res.json({ answer: aiAnswer });
-  } catch (error) {
-    console.error("Error calling Hugging Face Text API:", error.message);
-    res.status(500).json({ error: "Something went wrong on the server." });
-  }
-});
-
-// --- ENDPOINT #2: IMAGE READER (Qwen2.5 VL) ---
+// --- VISUAL QUESTION ANSWERING (BLIP VQA) ENDPOINT ---
 app.post('/read-image-from-url', async (req, res) => {
   try {
-    const IMAGE_API_URL = "https://api-inference.huggingface.co/models/unsloth/Qwen2.5-VL-7B-Instruct"; // Your chosen model
+    const IMAGE_API_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-vqa-base";
     const { prompt, imageUrl } = req.body;
 
     if (!prompt || !imageUrl) {
       return res.status(400).json({ error: "A prompt and imageUrl are required." });
     }
 
+    // STEP 1: Your server downloads the image from the URL
+    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const imageData = imageResponse.data;
+
+    // STEP 2: Your server sends the image DATA and the prompt to the BLIP model
+    // The BLIP VQA API expects the prompt to be part of the URL parameters
     const response = await axios.post(
-      IMAGE_API_URL,
-      { inputs: { image: imageUrl, question: prompt } },
-      { headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` } }
+      `${IMAGE_API_URL}?question=${encodeURIComponent(prompt)}`, // Prompt is in the URL
+      imageData, // Image data is the body
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.HF_TOKEN}`,
+          "Content-Type": imageResponse.headers['content-type']
+        }
+      }
     );
     
     const result = response.data;
-    const aiAnswer = result[0].generated_text;
+    const aiAnswer = result[0].answer;
 
     res.json({ answer: aiAnswer });
   } catch (error) {
@@ -61,7 +46,7 @@ app.post('/read-image-from-url', async (req, res) => {
   }
 });
 
-// 5. Start the server
+// 3. Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
