@@ -1,11 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const axios = require('axios'); // Use the axios library for requests
+const axios = require('axios'); // Use the axios library
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // This line handles CORS policy
+app.use(cors());
 
 // --- ENDPOINT #1: TEXT SOLVER ---
 app.post('/solve-math', async (req, res) => {
@@ -28,28 +28,33 @@ app.post('/solve-math', async (req, res) => {
 // --- ENDPOINT #2: IMAGE READER (FROM URL) ---
 app.post('/read-image-from-url', async (req, res) => {
   try {
-    const VQA_API_URL = "https://api-inference.huggingface.co/models/dandelin/vilt-b32-finetuned-vqa";
+    // This model is known to be reliable for this task
+    const VQA_API_URL = "https://api-inference.huggingface.co/models/impira/layoutlm-document-qa";
     const { prompt, imageUrl } = req.body;
     if (!prompt || !imageUrl) return res.status(400).json({ error: "A prompt and imageUrl are required." });
 
-    // Server fetches the image using axios
+    // 1. Server fetches the image as raw data (an array buffer)
     const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    const imageBase64 = Buffer.from(imageResponse.data).toString('base64');
-
-    // Server sends the question and image to the Hugging Face API using axios
-    const hfResponse = await axios.post(VQA_API_URL, {
-      inputs: {
+    
+    // 2. We create the payload for the API
+    const payload = {
         question: prompt,
-        image: imageBase64
+        // The image is sent as a base64 string, which is what this model expects
+        image: Buffer.from(imageResponse.data).toString('base64')
+    };
+
+    // 3. Server sends the data to the Hugging Face API
+    const hfResponse = await axios.post(VQA_API_URL, payload, {
+      headers: { 
+        "Authorization": `Bearer ${process.env.HF_TOKEN}`,
+        "Content-Type": "application/json"
       }
-    }, {
-      headers: { "Authorization": `Bearer ${process.env.HF_TOKEN}` }
     });
 
     res.json({ answer: hfResponse.data[0].answer });
 
   } catch (error) {
-    console.error("FULL ERROR OBJECT:", error);
+    console.error("FULL ERROR OBJECT:", error.response ? error.response.data : error);
     res.status(500).json({ error: "Something went wrong. Check the logs." });
   }
 });
